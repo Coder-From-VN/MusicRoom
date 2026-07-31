@@ -81,3 +81,4 @@ jobs:
             **/*.pdb
             **/.DS_Store
             **/appsettings.Development.json
+          log-level: verbose
