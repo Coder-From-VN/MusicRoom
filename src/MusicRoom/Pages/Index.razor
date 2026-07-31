@@ -4,62 +4,158 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<h3>🎵 YouTube Music Room</h3>
-
-@if (errorMessage != null)
-{
-    <p class="error">@errorMessage</p>
-}
-
-@if (string.IsNullOrEmpty(currentRoomCode))
-{
-    <div class="lobby">
-        <button @onclick="CreateRoom" disabled="@isLoading">Create New Room</button>
-        <hr />
-        <input @bind="joinCode" placeholder="Enter Room Code" maxlength="6" disabled="@isLoading" />
-        <button @onclick="JoinRoom" disabled="@isLoading">Join Room</button>
-    </div>
-}
-else
-{
-    <div class="room">
-        <h4>Room: <b>@currentRoomCode</b> <small>(share this code with friends)</small></h4>
-
-        <div class="add-song">
-            <input @bind="youtubeUrl" @bind:event="oninput" placeholder="Paste YouTube link" disabled="@isLoading" />
-            <button @onclick="AddSong" disabled="@(isLoading || string.IsNullOrWhiteSpace(youtubeUrl))">Add to Queue</button>
-            <button @onclick="Skip" disabled="@isLoading">Skip ⏭</button>
+<div class="app-container" data-theme="@currentTheme">
+    <header class="app-header">
+        <div class="logo">
+            <div class="logo-icon-wrapper">
+                <span class="logo-icon">🎵</span>
+            </div>
+            <h2>SyncWave</h2>
         </div>
 
-        @if (currentSong != null)
-        {
-            <h5>Now Playing: @currentSong.Title</h5>
-        }
-        else
-        {
-            <p><em>Nothing playing — add a song to get started!</em></p>
-        }
+        <div class="header-actions">
+            @if (!string.IsNullOrEmpty(currentRoomCode))
+            {
+                <div class="room-badge">
+                    <span class="status-dot"></span>
+                    <span class="room-text">Room: <strong>@currentRoomCode</strong></span>
+                    <button class="copy-btn" @onclick="CopyRoomCode" title="Copy Room Code">📋</button>
+                </div>
+            }
 
-        <div id="ytplayer"></div>
+            <button class="theme-toggle-btn" @onclick="ToggleTheme" title="Toggle Theme">
+                @(currentTheme == "dark" ? "☀️" : "🌙")
+            </button>
+        </div>
+    </header>
 
-        <h5>Queue (@queue.Count song@(queue.Count == 1 ? "" : "s"))</h5>
-        @if (queue.Count == 0)
-        {
-            <p><em>Queue is empty.</em></p>
-        }
-        else
-        {
-            <ul>
-                @foreach (var item in queue)
-                {
-                    <li>@item.Title</li>
-                }
-            </ul>
-        }
-    </div>
-}
+    @if (errorMessage != null)
+    {
+        <div class="alert alert-danger">
+            <span>⚠️</span>
+            <span>@errorMessage</span>
+            <button class="alert-close" @onclick="@(() => errorMessage = null)">✕</button>
+        </div>
+    }
+
+    @if (string.IsNullOrEmpty(currentRoomCode))
+    {
+        <div class="lobby-card">
+            <div class="lobby-header">
+                <h3>Welcome to SyncWave</h3>
+                <p>Listen to YouTube music in sync with your friends.</p>
+            </div>
+
+            <div class="lobby-actions">
+                <button class="btn btn-primary btn-block" @onclick="CreateRoom" disabled="@isLoading">
+                    @if (isLoading)
+                    {
+                        <span class="spinner"></span>
+                        <span>Connecting...</span>
+                    }
+                    else
+                    {
+                        <span>✨ Create New Room</span>
+                    }
+                </button>
+
+                <div class="divider"><span>OR</span></div>
+
+                <div class="join-group">
+                    <input @bind="joinCode"
+                           @bind:event="oninput"
+                           @onkeyup="HandleJoinKeyUp"
+                           placeholder="Enter 6-digit code"
+                           maxlength="6"
+                           disabled="@isLoading"
+                           class="form-control text-center" />
+                    <button class="btn btn-secondary" @onclick="JoinRoom" disabled="@(isLoading || string.IsNullOrWhiteSpace(joinCode))">
+                        Join
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="room-grid">
+            <!-- Left Column: Player & Controls -->
+            <div class="player-section">
+                <div class="player-card">
+                    <div class="video-wrapper">
+                        <div id="ytplayer"></div>
+                    </div>
+
+                    <div class="now-playing-info">
+                        <div class="track-details">
+                            <span class="tag">NOW PLAYING</span>
+                            <h4 class="track-title">
+                                @(currentSong != null ? currentSong.Title : "Nothing playing right now")
+                            </h4>
+                        </div>
+                        <button class="btn btn-skip" @onclick="Skip" disabled="@isLoading" title="Skip to next song">
+                            Skip ⏭
+                        </button>
+                    </div>
+                </div>
+
+                <div class="add-song-card">
+                    <h5>Add to Queue</h5>
+                    <div class="input-group">
+                        <input @bind="youtubeUrl"
+                               @bind:event="oninput"
+                               @onkeyup="HandleAddSongKeyUp"
+                               placeholder="Paste YouTube video or track URL..."
+                               disabled="@isLoading"
+                               class="form-control" />
+                        <button class="btn btn-accent"
+                                @onclick="AddSong"
+                                disabled="@(isLoading || string.IsNullOrWhiteSpace(youtubeUrl))">
+                            Add Song
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Queue -->
+            <div class="queue-section">
+                <div class="queue-card">
+                    <div class="queue-header">
+                        <h5>Up Next</h5>
+                        <span class="queue-count">@queue.Count song@(queue.Count == 1 ? "" : "s")</span>
+                    </div>
+
+                    @if (queue.Count == 0)
+                    {
+                        <div class="empty-queue">
+                            <span class="empty-icon">🎶</span>
+                            <p>Queue is empty</p>
+                            <small>Paste a YouTube link to play something!</small>
+                        </div>
+                    }
+                    else
+                    {
+                        <ul class="queue-list">
+                            @for (int i = 0; i < queue.Count; i++)
+                            {
+                                var item = queue[i];
+                                <li class="queue-item">
+                                    <span class="item-index">#@(i + 1)</span>
+                                    <div class="item-info">
+                                        <span class="item-title">@item.Title</span>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
 
 @code {
+    private string currentTheme = "dark";
     private string? currentRoomCode;
     private string joinCode = "";
     private string youtubeUrl = "";
@@ -124,7 +220,7 @@ else
 
         hub.Reconnected += async _ =>
         {
-            if (!string.IsNullOrEmpty(currentRoomCode))
+            if (!string.IsNullOrEmpty(currentRoomCode) && hub != null)
                 await hub.SendAsync("JoinRoom", currentRoomCode);
         };
 
@@ -135,6 +231,27 @@ else
         catch (Exception)
         {
             errorMessage = "Couldn't connect to the server. Please refresh the page.";
+        }
+    }
+
+    private void ToggleTheme()
+    {
+        currentTheme = currentTheme == "dark" ? "light" : "dark";
+    }
+
+    private async Task HandleJoinKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(joinCode) && !isLoading)
+        {
+            await JoinRoom();
+        }
+    }
+
+    private async Task HandleAddSongKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(youtubeUrl) && !isLoading)
+        {
+            await AddSong();
         }
     }
 
@@ -168,7 +285,7 @@ else
         }
         catch
         {
-            // Page may be navigating away or the circuit dropped — safe to ignore.
+            // Safe to ignore if navigating away.
         }
     }
 
@@ -181,29 +298,42 @@ else
 
     private async Task CreateRoom()
     {
+        if (hub == null) return;
         errorMessage = null;
         isLoading = true;
-        await hub!.SendAsync("CreateRoom");
+        await hub.SendAsync("CreateRoom");
     }
 
     private async Task JoinRoom()
     {
-        if (string.IsNullOrWhiteSpace(joinCode)) return;
+        if (string.IsNullOrWhiteSpace(joinCode) || hub == null) return;
         errorMessage = null;
         isLoading = true;
-        await hub!.SendAsync("JoinRoom", joinCode.Trim().ToUpperInvariant());
+        await hub.SendAsync("JoinRoom", joinCode.Trim().ToUpperInvariant());
     }
 
     private async Task AddSong()
     {
-        if (string.IsNullOrWhiteSpace(youtubeUrl)) return;
+        if (string.IsNullOrWhiteSpace(youtubeUrl) || hub == null) return;
         isLoading = true;
-        await hub!.SendAsync("AddToQueue", currentRoomCode, youtubeUrl);
+        await hub.SendAsync("AddToQueue", currentRoomCode, youtubeUrl);
         youtubeUrl = "";
         isLoading = false;
     }
 
-    private async Task Skip() => await hub!.SendAsync("SkipSong", currentRoomCode);
+    private async Task Skip()
+    {
+        if (hub == null) return;
+        await hub.SendAsync("SkipSong", currentRoomCode);
+    }
+
+    private async Task CopyRoomCode()
+    {
+        if (!string.IsNullOrEmpty(currentRoomCode))
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", currentRoomCode);
+        }
+    }
 
     public async ValueTask DisposeAsync()
     {

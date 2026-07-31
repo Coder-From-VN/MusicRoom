@@ -8,7 +8,7 @@ on:
 
 env:
   DOTNET_VERSION: "8.0.x"
-  AZURE_WEBAPP_NAME: "your-app-name-here"          # <-- change this
+  AZURE_WEBAPP_NAME: "your-app-name-here"
   PUBLISH_DIR: "${{ github.workspace }}/publish"
 
 jobs:
