@@ -48,9 +48,15 @@ jobs:
       - name: Publish
         run: dotnet publish src/MusicRoom/MusicRoom.csproj --configuration Release --output ${{ env.PUBLISH_DIR }}
 
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
+      - name: Deploy to Somee.com via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: ${{ env.PUBLISH_DIR }}
+          server: ${{ secrets.SOMEE_FTP_SERVER }}
+          username: ${{ secrets.SOMEE_FTP_USERNAME }}
+          password: ${{ secrets.SOMEE_FTP_PASSWORD }}
+          local-dir: publish/
+          server-dir: ${{ secrets.SOMEE_FTP_SERVER_DIR }}
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/*.pdb
