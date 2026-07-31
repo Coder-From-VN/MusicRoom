@@ -105,13 +105,13 @@
                         <input @bind="youtubeUrl"
                                @bind:event="oninput"
                                @onkeyup="HandleAddSongKeyUp"
-                               placeholder="Paste YouTube video or track URL..."
+                               placeholder="Paste YouTube link here..."
                                disabled="@isLoading"
                                class="form-control" />
                         <button class="btn btn-accent"
                                 @onclick="AddSong"
                                 disabled="@(isLoading || string.IsNullOrWhiteSpace(youtubeUrl))">
-                            Add Song
+                            + Add
                         </button>
                     </div>
                 </div>

@@ -307,21 +307,18 @@
     }
 
     /* 8. Room Grid Layout */
-    .room-grid {
-        max-width: 1200px;
-        margin: 0 auto;
-        display: grid;
-        grid-template-columns: 1fr 340px;
-        gap: 1.5rem;
-    }
+.room-grid {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    /* Slightly wider right column for a better balance */
+    grid-template-columns: 1fr 380px;
+    gap: 1.5rem;
+    /* Align both columns to the top so they don't stretch weirdly */
+    align-items: start;
+}
 
     .player-section, .queue-section {
-        /* Grid items default to min-width: auto, which means their content's
-           natural size becomes a hard minimum the column can't shrink below.
-           Without this, a long song title or button row can force the whole
-           grid wider than the viewport — and since html/body use
-           overflow-x: hidden, that overflow gets silently clipped instead of
-           scrollable, which is what was cutting off the queue sidebar. */
         min-width: 0;
     }
 
@@ -332,7 +329,7 @@
     }
 
     /* 9. Cards */
-    .player-card, .add-song-card, .queue-card {
+    .add-song-card{
         background: var(--card-bg);
         border: 1px solid var(--card-border);
         border-radius: 14px;
@@ -342,6 +339,19 @@
         backdrop-filter: blur(10px);
     }
 
+.player-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem; /* Replaces awkward margins between video and text */
+}
+
         .add-song-card h5 {
             margin-top: 0;
             margin-bottom: 0.75rem;
@@ -349,30 +359,47 @@
             font-weight: 600;
         }
 
-    .video-wrapper {
-        position: relative;
-        padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
-        height: 0;
-        background: #000;
-        border-radius: 10px;
-        overflow: hidden;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+.video-wrapper {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+    .video-wrapper ::deep iframe,
+    .video-wrapper iframe,
+    .video-wrapper div#ytplayer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100% !important;
+        height: 100% !important;
+        border: none;
     }
 
-        .video-wrapper iframe, .video-wrapper div {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-
-    .now-playing-info {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 1rem;
+    .video-wrapper iframe, .video-wrapper div {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
     }
+
+.now-playing-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.25rem 0.5rem 0;
+}
+
+.track-details {
+    flex: 1;
+    min-width: 0; /* Allows text truncation if title is too long */
+}
 
     .tag {
         font-size: 0.7rem;
@@ -381,23 +408,36 @@
         font-weight: 700;
     }
 
-    .track-title {
-        margin: 0.25rem 0 0 0;
-        font-size: 1.15rem;
-        font-weight: 600;
-    }
+.track-title {
+    margin: 0.25rem 0 0 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis; /* Prevents long YouTube titles from breaking layout */
+}
 
     .input-group {
         display: flex;
         gap: 0.5rem;
     }
 
-    /* 10. Queue Section */
-    .queue-card {
-        height: calc(100% - 3rem);
-        display: flex;
-        flex-direction: column;
-    }
+.queue-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 1.25rem;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+    /* Make the queue card match the height of the left column gracefully */
+    display: flex;
+    flex-direction: column;
+    min-height: 480px;
+    max-height: calc(100vh - 120px);
+    position: sticky;
+    top: 1.5rem;
+}
+
 
     .queue-header {
         display: flex;
@@ -420,16 +460,16 @@
         font-weight: 600;
     }
 
-    .queue-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        overflow-y: auto;
-        max-height: 450px;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
+.queue-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    overflow-y: auto;
+    flex: 1; /* Automatically takes remaining height */
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
 
     .queue-item {
         display: flex;
