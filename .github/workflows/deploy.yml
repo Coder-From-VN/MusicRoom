@@ -11,6 +11,10 @@ env:
   AZURE_WEBAPP_NAME: "your-app-name-here"
   PUBLISH_DIR: "${{ github.workspace }}/publish"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
