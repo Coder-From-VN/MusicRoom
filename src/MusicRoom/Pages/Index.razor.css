@@ -315,6 +315,16 @@
         gap: 1.5rem;
     }
 
+    .player-section, .queue-section {
+        /* Grid items default to min-width: auto, which means their content's
+           natural size becomes a hard minimum the column can't shrink below.
+           Without this, a long song title or button row can force the whole
+           grid wider than the viewport — and since html/body use
+           overflow-x: hidden, that overflow gets silently clipped instead of
+           scrollable, which is what was cutting off the queue sidebar. */
+        min-width: 0;
+    }
+
     @media (max-width: 850px) {
         .room-grid {
             grid-template-columns: 1fr;
@@ -441,7 +451,16 @@
         font-weight: bold;
     }
 
+    .item-info {
+        /* The actual flex child of .queue-item — needs to be allowed to
+           shrink below its content's natural width so .item-title's
+           ellipsis truncation can actually take effect. */
+        flex: 1;
+        min-width: 0;
+    }
+
     .item-title {
+        display: block;
         font-size: 0.9rem;
         font-weight: 500;
         white-space: nowrap;
