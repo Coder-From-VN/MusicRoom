@@ -1,0 +1,214 @@
+@page "/"
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<h3>🎵 YouTube Music Room</h3>
+
+@if (errorMessage != null)
+{
+    <p class="error">@errorMessage</p>
+}
+
+@if (string.IsNullOrEmpty(currentRoomCode))
+{
+    <div class="lobby">
+        <button @onclick="CreateRoom" disabled="@isLoading">Create New Room</button>
+        <hr />
+        <input @bind="joinCode" placeholder="Enter Room Code" maxlength="6" disabled="@isLoading" />
+        <button @onclick="JoinRoom" disabled="@isLoading">Join Room</button>
+    </div>
+}
+else
+{
+    <div class="room">
+        <h4>Room: <b>@currentRoomCode</b> <small>(share this code with friends)</small></h4>
+
+        <div class="add-song">
+            <input @bind="youtubeUrl" @bind:event="oninput" placeholder="Paste YouTube link" disabled="@isLoading" />
+            <button @onclick="AddSong" disabled="@(isLoading || string.IsNullOrWhiteSpace(youtubeUrl))">Add to Queue</button>
+            <button @onclick="Skip" disabled="@isLoading">Skip ⏭</button>
+        </div>
+
+        @if (currentSong != null)
+        {
+            <h5>Now Playing: @currentSong.Title</h5>
+        }
+        else
+        {
+            <p><em>Nothing playing — add a song to get started!</em></p>
+        }
+
+        <div id="ytplayer"></div>
+
+        <h5>Queue (@queue.Count song@(queue.Count == 1 ? "" : "s"))</h5>
+        @if (queue.Count == 0)
+        {
+            <p><em>Queue is empty.</em></p>
+        }
+        else
+        {
+            <ul>
+                @foreach (var item in queue)
+                {
+                    <li>@item.Title</li>
+                }
+            </ul>
+        }
+    </div>
+}
+
+@code {
+    private string? currentRoomCode;
+    private string joinCode = "";
+    private string youtubeUrl = "";
+    private string? errorMessage;
+    private List<QueueItem> queue = new();
+    private QueueItem? currentSong;
+    private DateTimeOffset? songStartedAt;
+
+    private HubConnection? hub;
+    private bool isLoading;
+    private bool playerInitialized;
+    private DotNetObjectReference<Index>? selfRef;
+    private Timer? syncTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hub = new HubConnectionBuilder()
+            .WithUrl(Nav.ToAbsoluteUri("/musichub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        hub.On<string>("RoomCreated", async code =>
+        {
+            currentRoomCode = code;
+            errorMessage = null;
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+        });
+
+        hub.On<string, List<QueueItem>, QueueItem?, DateTimeOffset?>("JoinedRoom", async (code, q, current, startedAt) =>
+        {
+            currentRoomCode = code;
+            queue = q;
+            currentSong = current;
+            songStartedAt = startedAt;
+            errorMessage = null;
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+            if (currentSong != null) await LoadCurrentSongInPlayer();
+        });
+
+        hub.On<List<QueueItem>>("QueueUpdated", async q =>
+        {
+            queue = q;
+            await InvokeAsync(StateHasChanged);
+        });
+
+        hub.On<QueueItem?, DateTimeOffset?>("SongChanged", async (song, startedAt) =>
+        {
+            currentSong = song;
+            songStartedAt = startedAt;
+            await InvokeAsync(StateHasChanged);
+            if (song != null) await LoadCurrentSongInPlayer();
+        });
+
+        hub.On<string>("Error", async msg =>
+        {
+            errorMessage = msg;
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+        });
+
+        hub.Reconnected += async _ =>
+        {
+            if (!string.IsNullOrEmpty(currentRoomCode))
+                await hub.SendAsync("JoinRoom", currentRoomCode);
+        };
+
+        try
+        {
+            await hub.StartAsync();
+        }
+        catch (Exception)
+        {
+            errorMessage = "Couldn't connect to the server. Please refresh the page.";
+        }
+    }
+
+    private async Task LoadCurrentSongInPlayer()
+    {
+        if (currentSong == null) return;
+
+        selfRef ??= DotNetObjectReference.Create(this);
+        if (!playerInitialized)
+        {
+            await JS.InvokeVoidAsync("ytInterop.init", "ytplayer", selfRef);
+            playerInitialized = true;
+        }
+
+        var elapsed = songStartedAt.HasValue
+            ? Math.Max(0, (DateTimeOffset.UtcNow - songStartedAt.Value).TotalSeconds)
+            : 0;
+
+        await JS.InvokeVoidAsync("ytInterop.loadVideo", currentSong.VideoId, elapsed);
+
+        syncTimer ??= new Timer(async _ => await SyncPlaybackTime(), null, 5000, 5000);
+    }
+
+    private async Task SyncPlaybackTime()
+    {
+        if (currentSong == null || songStartedAt == null || hub is null) return;
+        var elapsed = (DateTimeOffset.UtcNow - songStartedAt.Value).TotalSeconds;
+        try
+        {
+            await JS.InvokeVoidAsync("ytInterop.syncTime", elapsed);
+        }
+        catch
+        {
+            // Page may be navigating away or the circuit dropped — safe to ignore.
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnDurationKnown(double seconds)
+    {
+        if (currentSong != null && hub != null && currentRoomCode != null)
+            await hub.SendAsync("ReportSongDuration", currentRoomCode, currentSong.Id, seconds);
+    }
+
+    private async Task CreateRoom()
+    {
+        errorMessage = null;
+        isLoading = true;
+        await hub!.SendAsync("CreateRoom");
+    }
+
+    private async Task JoinRoom()
+    {
+        if (string.IsNullOrWhiteSpace(joinCode)) return;
+        errorMessage = null;
+        isLoading = true;
+        await hub!.SendAsync("JoinRoom", joinCode.Trim().ToUpperInvariant());
+    }
+
+    private async Task AddSong()
+    {
+        if (string.IsNullOrWhiteSpace(youtubeUrl)) return;
+        isLoading = true;
+        await hub!.SendAsync("AddToQueue", currentRoomCode, youtubeUrl);
+        youtubeUrl = "";
+        isLoading = false;
+    }
+
+    private async Task Skip() => await hub!.SendAsync("SkipSong", currentRoomCode);
+
+    public async ValueTask DisposeAsync()
+    {
+        syncTimer?.Dispose();
+        selfRef?.Dispose();
+        if (hub != null) await hub.DisposeAsync();
+    }
+}
