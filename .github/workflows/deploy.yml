@@ -22,10 +22,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -36,7 +36,7 @@ jobs:
         run: dotnet build MusicRoom.sln --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test MusicRoom.sln --configuration Release --no-build
+        run: dotnet test MusicRoom.sln --configuration Release --no-build --verbosity normal
 
   deploy:
     needs: build-and-test
@@ -45,20 +45,27 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore src/MusicRoom/MusicRoom.csproj
 
       - name: Publish
         run: |
           dotnet publish src/MusicRoom/MusicRoom.csproj \
-            -c Release \
-            -o "${{ env.PUBLISH_DIR }}"
+            --configuration Release \
+            --no-restore \
+            --output "${{ env.PUBLISH_DIR }}"
 
-      - name: Deploy to Somee FTP
+      - name: List publish output
+        run: ls -la "${{ env.PUBLISH_DIR }}"
+
+      - name: Deploy to Somee via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
           server: ${{ secrets.SOMEE_FTP_SERVER }}
@@ -73,3 +80,4 @@ jobs:
             **/.git*/**
             **/*.pdb
             **/.DS_Store
+            **/appsettings.Development.json
