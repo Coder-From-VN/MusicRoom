@@ -1,31 +1,24 @@
-name: Build, Test & Deploy
+name: Build, Test, Play Doom & Deploy
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 env:
   DOTNET_VERSION: "8.0.x"
   PUBLISH_DIR: "${{ github.workspace }}/publish"
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -33,14 +26,60 @@ jobs:
         run: dotnet restore MusicRoom.sln
 
       - name: Build
-        run: dotnet build MusicRoom.sln --configuration Release --no-restore
+        run: dotnet build MusicRoom.sln --no-restore --configuration Release
 
       - name: Test
-        run: dotnet test MusicRoom.sln --configuration Release --no-build --verbosity normal
+        run: dotnet test MusicRoom.sln --no-build --configuration Release --verbosity normal
 
-  deploy:
+  play-doom:
     needs: build-and-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      died: ${{ steps.rip.outputs.died }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+
+      - name: Clone doomgeneric
+        run: git clone --depth 1 https://github.com/ozkl/doomgeneric.git
+
+      - name: Get Freedoom IWAD (free, open-licensed)
+        run: |
+          curl -L -o freedoom.zip \
+            https://github.com/freedoom/freedoom/releases/download/v0.13.0/freedoom-0.13.0.zip
+          unzip freedoom.zip -d freedoom
+          cp freedoom/freedoom-0.13.0/freedoom1.wad doomgeneric/doomgeneric/doom1.wad
+
+      - name: Add ASCII terminal renderer + death hook
+        run: |
+          cp .ci/doomgeneric_term.c doomgeneric/doomgeneric/
+          sed -i '/P_KillMobj/,/{/{ /{/a\    if (target->player) printf("::PLAYER_DIED::\\n");
+          }' doomgeneric/doomgeneric/p_inter.c
+
+      - name: Build (headless — no SDL needed)
+        run: |
+          cd doomgeneric/doomgeneric
+          gcc -O2 -o doomgeneric *.c -lm
+
+      - name: Play until death (or timeout)
+        id: rip
+        run: |
+          cd doomgeneric/doomgeneric
+          set +e
+          timeout 300 ./doomgeneric -iwad doom1.wad -skill 4 2>&1 | tee run.log
+          if grep -q "::PLAYER_DIED::" run.log; then
+            echo "died=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "died=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    needs: [build-and-test, play-doom]
+    if: needs.play-doom.outputs.died == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
