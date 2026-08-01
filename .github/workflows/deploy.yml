@@ -88,4 +88,5 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y lftp
-          lftp -u "${{ secrets.SOMEE_FTP_USERNAME }},${{ secrets.SOMEE_FTP_PASSWORD }}" "${{ secrets.SOMEE_FTP_SERVER }}" -e "cd ${{ secrets.SOMEE_FTP_SERVER_DIR }}; rm app_offline.htm; bye"
+          lftp -u "${{ secrets.SOMEE_FTP_USERNAME }},${{ secrets.SOMEE_FTP_PASSWORD }}" "${{ secrets.SOMEE_FTP_SERVER }}" \
+            -e "cd ${{ secrets.SOMEE_FTP_SERVER_DIR }}; rm -f app_offline.htm; bye" || true
