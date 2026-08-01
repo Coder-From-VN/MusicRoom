@@ -1,4 +1,4 @@
-name: Build, Test, Play Doom & Deploy
+name: Build, Test & Deploy
 
 on:
   push:
@@ -31,65 +31,9 @@ jobs:
       - name: Test
         run: dotnet test MusicRoom.sln --no-build --configuration Release --verbosity normal
 
-  play-doom:
+  deploy:
     needs: build-and-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    outputs:
-      died: ${{ steps.rip.outputs.died }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential
-
-      - name: Clone doomgeneric
-        run: git clone --depth 1 https://github.com/ozkl/doomgeneric.git
-
-      - name: Get Freedoom IWAD (free, open-licensed)
-        run: |
-          curl -L -o freedoom.zip \
-            https://github.com/freedoom/freedoom/releases/download/v0.13.0/freedoom-0.13.0.zip
-          unzip freedoom.zip -d freedoom
-          cp freedoom/freedoom-0.13.0/freedoom1.wad doomgeneric/doomgeneric/doom1.wad
-
-      - name: Add ASCII terminal renderer + death hook
-        run: |
-          cp .ci/doomgeneric_term.c doomgeneric/doomgeneric/
-          sed -i '/P_KillMobj/,/{/{ /{/a\    if (target->player) printf("::PLAYER_DIED::\\n");
-          }' doomgeneric/doomgeneric/p_inter.c
-
-      - name: Build (headless — no SDL needed)
-        run: |
-          cd doomgeneric/doomgeneric
-          gcc -O2 -DNORMALUNIX -DLINUX -D_DEFAULT_SOURCE -w -o doomgeneric \
-            dummy.c am_map.c doomdef.c doomstat.c dstrings.c d_event.c d_items.c d_iwad.c d_loop.c d_main.c d_mode.c d_net.c \
-            f_finale.c f_wipe.c g_game.c hu_lib.c hu_stuff.c info.c i_cdmus.c i_endoom.c i_joystick.c i_scale.c i_sound.c \
-            i_system.c i_timer.c memio.c m_argv.c m_bbox.c m_cheat.c m_config.c m_controls.c m_fixed.c m_menu.c m_misc.c \
-            m_random.c p_ceilng.c p_doors.c p_enemy.c p_floor.c p_inter.c p_lights.c p_map.c p_maputl.c p_mobj.c p_plats.c \
-            p_pspr.c p_saveg.c p_setup.c p_sight.c p_spec.c p_switch.c p_telept.c p_tick.c p_user.c r_bsp.c r_data.c r_draw.c \
-            r_main.c r_plane.c r_segs.c r_sky.c r_things.c sha1.c sounds.c statdump.c st_lib.c st_stuff.c s_sound.c tables.c \
-            v_video.c wi_stuff.c w_checksum.c w_file.c w_main.c w_wad.c z_zone.c w_file_stdc.c i_input.c i_video.c \
-            doomgeneric.c doomgeneric_term.c \
-            -lm
-
-      - name: Play until death (or timeout)
-        id: rip
-        run: |
-          cd doomgeneric/doomgeneric
-          set +e
-          timeout 300 ./doomgeneric -iwad doom1.wad -skill 4 -warp 1 1 2>&1 | tee run.log
-          if grep -q "::PLAYER_DIED::" run.log; then
-            echo "died=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "[fallback] time's up, taking the L"
-            echo "died=true" >> "$GITHUB_OUTPUT"
-          fi
-
-  deploy:
-    needs: [build-and-test, play-doom]
-    if: needs.play-doom.outputs.died == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
