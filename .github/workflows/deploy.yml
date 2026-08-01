@@ -68,7 +68,7 @@ jobs:
           password: ${{ secrets.SOMEE_FTP_PASSWORD }}
           server-dir: ${{ secrets.SOMEE_FTP_SERVER_DIR }}
           local-dir: ${{ github.workspace }}/app_offline_temp/
-          state-name: .ftp-deploy-sync-state-offline.json
+          state-name: .ftp-deploy-sync-state-offline-${{ github.run_id }}.json
           dangerous-clean-slate: false
           log-level: verbose
 
@@ -94,4 +94,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y lftp
-          lftp -u "${{ secrets.SOMEE_FTP_USERNAME }},${{ secrets.SOMEE_FTP_PASSWORD }}" "${{ secrets.SOMEE_FTP_SERVER }}" -e "cd ${{ secrets.SOMEE_FTP_SERVER_DIR }}; rm app_offline.htm; bye"
+          lftp -u "${{ secrets.SOMEE_FTP_USERNAME }},${{ secrets.SOMEE_FTP_PASSWORD }}" "${{ secrets.SOMEE_FTP_SERVER }}" -e "
+            cd ${{ secrets.SOMEE_FTP_SERVER_DIR }};
+            rm -f app_offline.htm 2>/dev/null || true;
+            bye
+          "
