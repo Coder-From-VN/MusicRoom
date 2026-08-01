@@ -30,3 +30,13 @@ void DG_SleepMs(uint32_t ms) { struct timespec t = {0, ms * 1000000}; nanosleep(
 uint32_t DG_GetTicksMs(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000 + t.tv_nsec / 1000000; }
 int DG_GetKey(int* pressed, unsigned char* key) { return 0; } // no input — the AI's "strategy" is vibes
 void DG_SetWindowTitle(const char* title) {}
+
+int main(int argc, char **argv)
+{
+    doomgeneric_Create(argc, argv);
+    while (1)
+    {
+        doomgeneric_Tick();
+    }
+    return 0;
+}
