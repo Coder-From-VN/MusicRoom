@@ -2,23 +2,30 @@ name: Build, Test & Deploy
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
 
 env:
   DOTNET_VERSION: "8.0.x"
   PUBLISH_DIR: "${{ github.workspace }}/publish"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -26,10 +33,10 @@ jobs:
         run: dotnet restore MusicRoom.sln
 
       - name: Build
-        run: dotnet build MusicRoom.sln --no-restore --configuration Release
+        run: dotnet build MusicRoom.sln --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test MusicRoom.sln --no-build --configuration Release --verbosity normal
+        run: dotnet test MusicRoom.sln --configuration Release --no-build --verbosity normal
 
   deploy:
     needs: build-and-test
@@ -53,7 +60,6 @@ jobs:
           cat > "${{ github.workspace }}/app_offline_temp/app_offline.htm" <<'EOF'
           <html><head><title>Maintenance</title></head><body><h1>Maintenance — Deploying update</h1></body></html>
           EOF
-
       - name: Upload app_offline.htm to take app offline
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
@@ -88,5 +94,4 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y lftp
-          lftp -u "${{ secrets.SOMEE_FTP_USERNAME }},${{ secrets.SOMEE_FTP_PASSWORD }}" "${{ secrets.SOMEE_FTP_SERVER }}" \
-            -e "cd ${{ secrets.SOMEE_FTP_SERVER_DIR }}; rm -f app_offline.htm; bye" || true
+          lftp -u "${{ secrets.SOMEE_FTP_USERNAME }},${{ secrets.SOMEE_FTP_PASSWORD }}" "${{ secrets.SOMEE_FTP_SERVER }}" -e "cd ${{ secrets.SOMEE_FTP_SERVER_DIR }}; rm app_offline.htm; bye"
