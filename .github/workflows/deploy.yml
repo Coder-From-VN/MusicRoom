@@ -60,6 +60,7 @@ jobs:
           cat > "${{ github.workspace }}/app_offline_temp/app_offline.htm" <<'EOF'
           <html><head><title>Maintenance</title></head><body><h1>Maintenance — Deploying update</h1></body></html>
           EOF
+
       - name: Upload app_offline.htm to take app offline
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
@@ -71,6 +72,9 @@ jobs:
           state-name: .ftp-deploy-sync-state-offline-${{ github.run_id }}.json
           dangerous-clean-slate: false
           log-level: verbose
+
+      - name: Wait for app to shut down
+        run: sleep 20
 
       - name: Deploy published files
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
