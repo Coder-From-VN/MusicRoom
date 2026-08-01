@@ -1,4 +1,34 @@
 #WebLink: http://freetimeproject.somee.com/
+
+## Fun fact: deployment requires dying in Doom first
+
+Every push to `main` triggers a CI pipeline that plays actual, unmodified id
+Software Doom source code — compiled headless, rendered as ASCII directly into
+the GitHub Actions log — and **only deploys once the player character dies**.
+
+This isn't a gimmick layered on top of a real check — it *is* the check.
+`build-and-test` still runs first and has to pass; `play-doom` is simply an
+extra required job standing between a green build and an actual deploy.
+
+**How it works:**
+- [`doomgeneric`](https://github.com/ozkl/doomgeneric) — a real, buildable port
+  of Doom's source with the rendering layer stripped out — compiles on the
+  runner with plain `gcc`, no SDL, no display needed.
+- A tiny custom renderer (`.ci/doomgeneric_term.c`) draws each frame as ASCII
+  brightness ramps straight to stdout, so scrolling the Actions log shows the
+  game playing out frame by frame.
+- One line patched into `p_inter.c` (Doom's actual death-handling function,
+  `P_KillMobj`) prints a marker the instant the player dies. CI greps the log
+  for it.
+- No input is fed to the game, so nothing attacks an idle player forever on
+  most maps — there's a 5-minute timeout as an honest fallback so the pipeline
+  can't hang indefinitely waiting on an AI with no actual survival instinct.
+
+Once death is confirmed, the pipeline takes the live site offline with an
+`app_offline.htm` marker, FTP-syncs the new build to Somee, then brings it
+back online — same zero-surprise deploy flow as a normal push, just gated
+behind a boss no one's actually fighting.
+
 # SyncWave 🎵
 
 Real-time shared YouTube queue. Create a room, share the 6-character code, everyone in
