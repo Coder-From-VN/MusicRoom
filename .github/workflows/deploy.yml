@@ -42,30 +42,38 @@ jobs:
     needs: build-and-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Restore
-        run: dotnet restore src/MusicRoom/MusicRoom.csproj
-
       - name: Publish
+        run: dotnet publish src/MusicRoom/MusicRoom.csproj --configuration Release --output ${{ env.PUBLISH_DIR }}
+
+      - name: Create app_offline marker (local)
         run: |
-          dotnet publish src/MusicRoom/MusicRoom.csproj \
-            --configuration Release \
-            --no-restore \
-            --output "${{ env.PUBLISH_DIR }}"
+          mkdir -p "${{ github.workspace }}/app_offline_temp"
+          cat > "${{ github.workspace }}/app_offline_temp/app_offline.htm" <<'EOF'
+          <html><head><title>Maintenance</title></head><body><h1>Maintenance — Deploying update</h1></body></html>
+          EOF
 
-      - name: List publish output
-        run: ls -la "${{ env.PUBLISH_DIR }}"
+      - name: Upload app_offline.htm to take app offline
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.SOMEE_FTP_SERVER }}
+          username: ${{ secrets.SOMEE_FTP_USERNAME }}
+          password: ${{ secrets.SOMEE_FTP_PASSWORD }}
+          server-dir: ${{ secrets.SOMEE_FTP_SERVER_DIR }}
+          local-dir: ${{ github.workspace }}/app_offline_temp/
+          state-name: .ftp-deploy-sync-state-offline.json
+          dangerous-clean-slate: false
+          log-level: verbose
 
-      - name: Deploy to Somee via FTP
+      - name: Deploy published files
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
           server: ${{ secrets.SOMEE_FTP_SERVER }}
@@ -73,7 +81,7 @@ jobs:
           password: ${{ secrets.SOMEE_FTP_PASSWORD }}
           server-dir: ${{ secrets.SOMEE_FTP_SERVER_DIR }}
           local-dir: ${{ env.PUBLISH_DIR }}/
-          state-name: .ftp-deploy-sync-state.json
+          state-name: .ftp-deploy-sync-state-main.json
           dangerous-clean-slate: false
           exclude: |
             **/.git*
@@ -82,3 +90,9 @@ jobs:
             **/.DS_Store
             **/appsettings.Development.json
           log-level: verbose
+
+      - name: Remove app_offline.htm (bring app online)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lftp
+          lftp -u "${{ secrets.SOMEE_FTP_USERNAME }},${{ secrets.SOMEE_FTP_PASSWORD }}" "${{ secrets.SOMEE_FTP_SERVER }}" -e "cd ${{ secrets.SOMEE_FTP_SERVER_DIR }}; rm app_offline.htm; bye"
