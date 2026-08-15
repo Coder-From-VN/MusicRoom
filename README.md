@@ -1,4 +1,4 @@
-#WebLink: http://freetimeproject.somee.com/
+#WebLink: http://3.104.55.174:8080/
 
 # SyncWave 🎵
 
