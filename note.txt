@@ -1,0 +1,135 @@
+
+
+6. PHAN 4 - TU DONG HOA VIEC DEPLOY (GITHUB ACTIONS -> EC2)
+----------------------------------------------------------------
+6.1. Them GitHub Secrets (repo -> Settings -> Secrets and variables ->
+Actions -> New repository secret):
+  - EC2_HOST: IP cong khai cua EC2
+  - EC2_USER: ubuntu
+  - EC2_SSH_KEY: toan bo noi dung file .pem
+
+6.2. Them job "deploy" vao docker-build.yml, chay sau job "docker-build"
+(dùng "needs: docker-build"), chi chay khi push that vao main (khong chay
+khi chi la pull_request):
+
+  - Dung action "appleboy/ssh-action" de SSH vao server va chay script:
+      docker pull <image>
+      docker stop musicroom || true
+      docker rm musicroom || true
+      docker run -d -p 8080:8080 --name musicroom \
+        --restart unless-stopped <image>
+  - "|| true" de lan deploy dau tien khong bi loi vi container chua ton tai
+  - "--restart unless-stopped": neu EC2 bi restart, container tu khoi dong
+    lai, khong can vao tay
+  - Tag image dung lai duoc bang cach cho job "docker-build" xuat ra
+    "outputs: image_tag" (tranh phai viet lai logic lowercase 2 lan)
+
+6.3. Loi gap phai lan chay dau tien: SSH TIMEOUT
+  Loi: "dial tcp ***:22: i/o timeout"
+  Nguyen nhan: security group chi cho phep SSH tu "My IP" (IP nha rieng),
+  trong khi GitHub Actions runner chay tu dai IP cua GitHub, luon luon
+  khac va thay doi lien tuc - khong the "cho phep truoc" nhu voi IP ca
+  nhan duoc.
+
+  Da can nhac 2 huong xu ly:
+    (a) Mo cong 22 cho toan bo internet (0.0.0.0/0) - don gian nhung kem
+        an toan hon
+    (b) Chi mo cong 22 tam thoi, dung IP cua chinh lan chay do, ngay truoc
+        khi deploy va dong lai ngay sau khi xong - da CHON PHUONG AN NAY
+        de gan voi thuc te production hon.
+
+  Cach trien khai phuong an (b):
+    - Tao 1 IAM user rieng cho CI (KHONG dung access key cua tai khoan
+      root), gan chinh sach (policy) toi thieu, chi cho phep 2 hanh dong
+      tren DUNG 1 security group:
+        ec2:AuthorizeSecurityGroupIngress
+        ec2:RevokeSecurityGroupIngress
+      (nguyen tac least privilege - chi cap dung quyen can, khong hon)
+    - Tao Access Key cho IAM user nay, luu vao GitHub Secrets:
+        AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION,
+        EC2_SECURITY_GROUP_ID
+    - Trong job "deploy", them cac step:
+        1. aws-actions/configure-aws-credentials - dang nhap AWS CLI
+        2. lay IP cong khai cua chinh runner dang chay
+        3. aws ec2 authorize-security-group-ingress - mo cong 22 cho
+           dung IP do (/32 - chi 1 dia chi duy nhat)
+        4. chay step SSH deploy nhu binh thuong
+        5. aws ec2 revoke-security-group-ingress - dong lai ngay, dung
+           "if: always()" de dam bao luon chay kem ca khi buoc deploy
+           bi loi (tranh de sot rule mo cong vinh vien theo thoi gian)
+
+6.4. Loi gap tiep theo: lay IP cua runner bi loi
+  Loi: "aws: [ERROR]: Unknown options: Too Many Requests}/32"
+  Nguyen nhan: dich vu mien phi dung de lay IP (api.ipify.org) bi gioi han
+  so luong request (rate limit) do co qua nhieu GitHub Actions runner tren
+  toan the gioi cung goi vao, tra ve chu "Too Many Requests" thay vi 1 dia
+  chi IP - chuoi nay bi dua thang vao tham so --cidr lam lenh AWS CLI loi.
+  Cach sua: doi sang dung dich vu checkip.amazonaws.com (cua chinh AWS,
+  on dinh hon nhieu vi phuc vu dung cho truong hop nay).
+
+
+7. GO BO PIPELINE CU (FTP/SOMEE)
+-------------------------------------
+Sau khi xac nhan pipeline AWS/Docker chay dung hoan toan, xoa han file
+.github/workflows/deploy.yml (workflow FTP deploy len Somee cu).
+Luu y quan trong: xoa file workflow chi dung tac dong tu day tro di - app
+dang chay san tren somee.com KHONG bi anh huong, van tiep tuc song binh
+thuong cho den khi tu tay tat no trong control panel cua somee (day la
+hanh dong rieng, ngoai pham vi cua repo Git).
+
+
+8. KIEM THU TOAN BO (END-TO-END)
+-------------------------------------
+  1. Sua code / workflow, git push len main
+  2. Vao tab Actions tren GitHub, theo doi:
+     - job "docker-build": build + push image len GHCR -> xanh
+     - job "deploy": 5 buoc (cau hinh AWS -> lay IP -> mo cong -> SSH
+       deploy -> dong cong) -> tat ca deu xanh
+  3. Mo http://<EC2_PUBLIC_IP>:8080 -> thay thay doi moi nhat da len -
+     xac nhan toan bo chuoi tu dong hoa chay dung, khong can thao tac tay
+     nao sau lenh "git push"
+
+
+9. CAP NHAT TAI LIEU
+-------------------------
+  - Cap nhat lai file README.md: doi #WebLink tu dia chi somee cu sang
+    dia chi EC2 moi (http://3.104.55.174:8080/)
+  - Kiem tra toan bo giao dien app (Index.razor...) - khong co text/link
+    nao khac hardcode dia chi cu, chi co README can sua
+
+
+10. NHUNG DIEU RUT RA / GHI NHO (TRA LOI Y MENTOR)
+--------------------------------------------------------
+  - Container khac Image: Dockerfile chi tao ra IMAGE (goi tinh, luu tru
+    trong registry). Muon co CONTAINER (tien trinh dang chay that) thi
+    server dich (EC2) phai co san Docker Engine - do chinh la "co che de
+    tao container tu image" ma mentor nhac den. Somee KHONG the lam duoc
+    dieu nay vi day la shared hosting IIS, chi nhan file qua FTP, khong co
+    quyen root/shell, khong the cai Docker.
+  - Somee vs AWS: Somee la mo hinh 1 server dung rieng co dinh - deploy la
+    copy file qua FTP roi IIS tu chay. AWS/Azure di theo huong SaaS - nhieu
+    dich vu chuyen biet thay vi 1 server chung chung:
+      + EC2 = tuong duong 1 server kieu Somee nhung co toan quyen root, tu
+        cai dat moi thu (bao gom Docker) - day chinh la cai da lam trong
+        bao cao nay.
+      + ECS = dich vu quan ly container chuyen nghiep, chi can khai bao
+        "muon chay image nay" con AWS tu lo viec dat container o dau,
+        scale nhu the nao.
+      + Lambda = chay theo su kien (event-driven), khong phu hop voi app
+        nay vi SyncWave can 1 tien trinh chay lien tuc (RoomBackgroundService
+        tick moi giay de tu dong chuyen bai hat) va giu ket noi SignalR
+        (WebSocket) song dai han - ban chat cua Lambda la "khong trang
+        thai" va tu tat khi khong co request, khong hop voi kien truc nay.
+
+
+11. VIEC CON MO / CAN NHAC TIEP
+------------------------------------
+  - IP cua EC2 hien tai (3.104.55.174) khong co dinh - neu tat/bat lai
+    instance, IP se doi, khien secret EC2_HOST va README bi sai theo. Neu
+    muon co dinh vinh vien can gan them 1 Elastic IP (mien phi khi dang
+    gan voi instance dang chay).
+  - File CLAUDE.md (tai lieu huong dan cho AI/dev khac trong repo) van con
+    mo ta pipeline FTP/Somee cu - can cap nhat lai cho dung voi pipeline
+    AWS/Docker moi.
+  - Co the can xoay vong (rotate) SSH key va AWS Access Key dinh ky de
+    dam bao an toan lau dai, dac biet neu du an duoc chia se/cong khai.
